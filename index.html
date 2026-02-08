@@ -428,6 +428,80 @@ function linReg(xs, ys) {
   return { r2: r * r, r, slope, intercept, n };
 }
 
+// ── Multivariate Linear Regression ──────────────────────────────────────────
+// Solves normal equations: β = (X'X)^(-1) X'y via Gauss-Jordan elimination
+function multiReg(data, metrics) {
+  // Filter to rows with all metrics + ERA_next non-null
+  const rows = data.filter(r => {
+    if (r.ERA_next == null) return false;
+    for (const m of metrics) { if (getVal(r, m) == null) return false; }
+    return true;
+  });
+  const n = rows.length;
+  const p = metrics.length + 1; // +1 for intercept
+  if (n < p + 2) return null;
+
+  // Build X matrix (with intercept column) and y vector
+  const X = rows.map(r => [1, ...metrics.map(m => getVal(r, m))]);
+  const y = rows.map(r => r.ERA_next);
+
+  // X'X (p x p)
+  const XtX = Array.from({ length: p }, (_, j) =>
+    Array.from({ length: p }, (_, k) => {
+      let s = 0; for (let i = 0; i < n; i++) s += X[i][j] * X[i][k]; return s;
+    })
+  );
+  // X'y (p x 1)
+  const Xty = Array.from({ length: p }, (_, j) => {
+    let s = 0; for (let i = 0; i < n; i++) s += X[i][j] * y[i]; return s;
+  });
+
+  // Gauss-Jordan on augmented [XtX | Xty]
+  const aug = XtX.map((row, i) => [...row, Xty[i]]);
+  for (let col = 0; col < p; col++) {
+    // Partial pivoting
+    let maxRow = col;
+    for (let r = col + 1; r < p; r++) {
+      if (Math.abs(aug[r][col]) > Math.abs(aug[maxRow][col])) maxRow = r;
+    }
+    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    const pivot = aug[col][col];
+    if (Math.abs(pivot) < 1e-12) return null; // Singular
+    for (let j = 0; j <= p; j++) aug[col][j] /= pivot;
+    for (let r = 0; r < p; r++) {
+      if (r === col) continue;
+      const f = aug[r][col];
+      for (let j = 0; j <= p; j++) aug[r][j] -= f * aug[col][j];
+    }
+  }
+  const coeffs = aug.map(row => row[p]); // [intercept, β1, β2, ...]
+
+  // Compute R²
+  const meanY = y.reduce((a, b) => a + b, 0) / n;
+  let ssTot = 0, ssRes = 0;
+  for (let i = 0; i < n; i++) {
+    let pred = 0;
+    for (let j = 0; j < p; j++) pred += coeffs[j] * X[i][j];
+    ssRes += (y[i] - pred) ** 2;
+    ssTot += (y[i] - meanY) ** 2;
+  }
+  const r2 = 1 - ssRes / ssTot;
+
+  return { coeffs, metrics, r2, n };
+}
+
+// Predict ERA from a multivariate model for a single row
+function multiPredict(model, row) {
+  if (!model) return null;
+  let pred = model.coeffs[0]; // intercept
+  for (let i = 0; i < model.metrics.length; i++) {
+    const val = getVal(row, model.metrics[i]);
+    if (val == null) return null;
+    pred += model.coeffs[i + 1] * val;
+  }
+  return pred;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function getVal(row, metric) {
   const key = METRIC_MAP[metric];
@@ -741,58 +815,64 @@ function renderProjections() {
     return;
   }
 
-  // Build regression models from historical paired data for each metric
-  const models = {};
+  // ── Weighted-average model (individual regressions) ──
+  const indivModels = {};
   for (const m of metrics) {
     const xs = histData.map(r => getVal(r, m));
     const ys = histData.map(r => r.ERA_next);
     const reg = linReg(xs, ys);
-    if (reg.n >= 10 && reg.r2 > 0) {
-      models[m] = reg;
-    }
+    if (reg.n >= 10 && reg.r2 > 0) indivModels[m] = reg;
   }
+  const indivMetrics = Object.keys(indivModels);
 
-  const modelMetrics = Object.keys(models);
-  if (modelMetrics.length === 0) {
+  // ── Multivariate model ──
+  const mvModel = metrics.length >= 2 ? multiReg(histData, metrics) : null;
+
+  if (indivMetrics.length === 0 && !mvModel) {
     document.getElementById('proj-wrap').innerHTML =
       '<div class="loading">No valid models with selected metrics.</div>';
     return;
   }
 
-  // For each current pitcher, compute R²-weighted predicted ERA
+  // For each current pitcher, compute both predictions
   const rows = [];
   for (const p of current) {
+    // Weighted average
     let weightedSum = 0, weightTotal = 0;
-    const preds = {};
-    for (const m of modelMetrics) {
+    for (const m of indivMetrics) {
       const val = getVal(p, m);
       if (val == null) continue;
-      const mod = models[m];
+      const mod = indivModels[m];
       const pred = mod.intercept + mod.slope * val;
-      preds[m] = pred;
       weightedSum += pred * mod.r2;
       weightTotal += mod.r2;
     }
-    if (weightTotal === 0) continue;
-    const projERA = weightedSum / weightTotal;
-    rows.push({ ...p, projERA, preds });
+    const projWtd = weightTotal > 0 ? weightedSum / weightTotal : null;
+
+    // Multivariate
+    const projMv = mvModel ? multiPredict(mvModel, p) : null;
+
+    if (projWtd == null && projMv == null) continue;
+    rows.push({ ...p, projWtd, projMv });
   }
 
   // Define columns
+  const fmtEra = v => v == null ? '' : v.toFixed(2);
   const cols = [
     { key: 'Name', label: 'Name', fmt: v => v },
     { key: 'IP', label: 'IP', fmt: v => v == null ? '' : v.toFixed(1) },
-    { key: 'ERA', label: '2025 ERA', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'projERA', label: 'Proj. 2026 ERA', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'FIP', label: 'FIP', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'xFIP', label: 'xFIP', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'SIERA', label: 'SIERA', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'xERA', label: 'xERA', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'K9', label: 'K/9', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'BB9', label: 'BB/9', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'HR9', label: 'HR/9', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'LOB', label: 'LOB%', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'KBB', label: 'K-BB%', fmt: v => v == null ? '' : v.toFixed(2) },
+    { key: 'ERA', label: '2025 ERA', fmt: fmtEra },
+    { key: 'projMv', label: 'Multivariate', fmt: fmtEra, highlight: 'mv' },
+    { key: 'projWtd', label: 'Wtd. Average', fmt: fmtEra, highlight: 'wtd' },
+    { key: 'FIP', label: 'FIP', fmt: fmtEra },
+    { key: 'xFIP', label: 'xFIP', fmt: fmtEra },
+    { key: 'SIERA', label: 'SIERA', fmt: fmtEra },
+    { key: 'xERA', label: 'xERA', fmt: fmtEra },
+    { key: 'K9', label: 'K/9', fmt: fmtEra },
+    { key: 'BB9', label: 'BB/9', fmt: fmtEra },
+    { key: 'HR9', label: 'HR/9', fmt: fmtEra },
+    { key: 'LOB', label: 'LOB%', fmt: fmtEra },
+    { key: 'KBB', label: 'K-BB%', fmt: fmtEra },
     { key: 'Stuff', label: 'Stuff+', fmt: v => v == null ? '' : v.toFixed(0) },
     { key: 'Location', label: 'Location+', fmt: v => v == null ? '' : v.toFixed(0) },
     { key: 'Pitching', label: 'Pitching+', fmt: v => v == null ? '' : v.toFixed(0) },
@@ -813,16 +893,21 @@ function renderProjections() {
   }
 
   // Build HTML
+  const hlStyles = {
+    mv:  { th: 'background:#f0fff4', td: 'font-weight:600;background:#f0fff4' },
+    wtd: { th: 'background:#eff6ff', td: 'font-weight:600;background:#eff6ff' }
+  };
+
   let html = '<table class="data-table"><thead><tr>';
   cols.forEach((col, i) => {
     let cls = '';
-    let arrow = '↕';
+    let arrow = '\u2195';
     if (projSortCol === i) {
       cls = projSortAsc ? 'sort-asc' : 'sort-desc';
-      arrow = projSortAsc ? '↑' : '↓';
+      arrow = projSortAsc ? '\u2191' : '\u2193';
     }
-    const highlight = col.key === 'projERA' ? ' style="background:#f0fff4"' : '';
-    html += `<th class="${cls}"${highlight} onclick="sortProj(${i})">${col.label}<span class="sort-arrow">${arrow}</span></th>`;
+    const hl = col.highlight ? ` style="${hlStyles[col.highlight].th}"` : '';
+    html += `<th class="${cls}"${hl} onclick="sortProj(${i})">${col.label}<span class="sort-arrow">${arrow}</span></th>`;
   });
   html += '</tr></thead><tbody>';
 
@@ -830,19 +915,21 @@ function renderProjections() {
   for (const row of display) {
     html += '<tr>';
     for (const col of cols) {
-      const highlight = col.key === 'projERA' ? ' style="font-weight:600;background:#f0fff4"' : '';
-      html += `<td${highlight}>${col.fmt(row[col.key])}</td>`;
+      const hl = col.highlight ? ` style="${hlStyles[col.highlight].td}"` : '';
+      html += `<td${hl}>${col.fmt(row[col.key])}</td>`;
     }
     html += '</tr>';
   }
   html += '</tbody></table>';
 
-  const modelList = modelMetrics.map(m => `${m} (R²=${models[m].r2.toFixed(3)})`).join(', ');
+  // Summary footer
+  const mvR2 = mvModel ? `R\u00b2=${mvModel.r2.toFixed(3)}, n=${mvModel.n}` : 'N/A';
+  const indivList = indivMetrics.map(m => `${m} (R\u00b2=${indivModels[m].r2.toFixed(3)})`).join(', ');
   html += `<div class="tab-help" style="margin-top:12px">
-    <b>Method:</b> R²-weighted average of individual metric predictions from historical data.<br>
-    <b>Models used:</b> ${modelList}<br>
+    <b style="color:#38a169">Multivariate model:</b> Single regression using all selected metrics simultaneously (${mvR2}).<br>
+    <b style="color:#3182ce">Weighted average:</b> Blends individual metric predictions weighted by their R\u00b2.<br>
+    <b>Metrics:</b> ${indivList}<br>
     ${sorted.length > 300 ? `Showing 300 of ${sorted.length} pitchers.` : `${sorted.length} pitchers.`}
-    Adjust IP minimum and metric checkboxes to change projections.
   </div>`;
 
   document.getElementById('proj-wrap').innerHTML = html;
