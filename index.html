@@ -815,45 +815,21 @@ function renderProjections() {
     return;
   }
 
-  // ── Weighted-average model (individual regressions) ──
-  const indivModels = {};
-  for (const m of metrics) {
-    const xs = histData.map(r => getVal(r, m));
-    const ys = histData.map(r => r.ERA_next);
-    const reg = linReg(xs, ys);
-    if (reg.n >= 10 && reg.r2 > 0) indivModels[m] = reg;
-  }
-  const indivMetrics = Object.keys(indivModels);
-
   // ── Multivariate model ──
   const mvModel = metrics.length >= 2 ? multiReg(histData, metrics) : null;
 
-  if (indivMetrics.length === 0 && !mvModel) {
+  if (!mvModel) {
     document.getElementById('proj-wrap').innerHTML =
-      '<div class="loading">No valid models with selected metrics.</div>';
+      '<div class="loading">Select at least 2 metrics to build a multivariate model.</div>';
     return;
   }
 
-  // For each current pitcher, compute both predictions
+  // For each current pitcher, compute prediction
   const rows = [];
   for (const p of current) {
-    // Weighted average
-    let weightedSum = 0, weightTotal = 0;
-    for (const m of indivMetrics) {
-      const val = getVal(p, m);
-      if (val == null) continue;
-      const mod = indivModels[m];
-      const pred = mod.intercept + mod.slope * val;
-      weightedSum += pred * mod.r2;
-      weightTotal += mod.r2;
-    }
-    const projWtd = weightTotal > 0 ? weightedSum / weightTotal : null;
-
-    // Multivariate
-    const projMv = mvModel ? multiPredict(mvModel, p) : null;
-
-    if (projWtd == null && projMv == null) continue;
-    rows.push({ ...p, projWtd, projMv });
+    const projMv = multiPredict(mvModel, p);
+    if (projMv == null) continue;
+    rows.push({ ...p, projMv });
   }
 
   // Define columns
@@ -862,8 +838,7 @@ function renderProjections() {
     { key: 'Name', label: 'Name', fmt: v => v },
     { key: 'IP', label: 'IP', fmt: v => v == null ? '' : v.toFixed(1) },
     { key: 'ERA', label: '2025 ERA', fmt: fmtEra },
-    { key: 'projMv', label: 'Multivariate', fmt: fmtEra, highlight: 'mv' },
-    { key: 'projWtd', label: 'Wtd. Average', fmt: fmtEra, highlight: 'wtd' },
+    { key: 'projMv', label: 'Proj. 2026 ERA', fmt: fmtEra, highlight: 'mv' },
     { key: 'FIP', label: 'FIP', fmt: fmtEra },
     { key: 'xFIP', label: 'xFIP', fmt: fmtEra },
     { key: 'SIERA', label: 'SIERA', fmt: fmtEra },
@@ -894,8 +869,7 @@ function renderProjections() {
 
   // Build HTML
   const hlStyles = {
-    mv:  { th: 'background:#f0fff4', td: 'font-weight:600;background:#f0fff4' },
-    wtd: { th: 'background:#eff6ff', td: 'font-weight:600;background:#eff6ff' }
+    mv:  { th: 'background:#f0fff4', td: 'font-weight:600;background:#f0fff4' }
   };
 
   let html = '<table class="data-table"><thead><tr>';
@@ -923,12 +897,9 @@ function renderProjections() {
   html += '</tbody></table>';
 
   // Summary footer
-  const mvR2 = mvModel ? `R\u00b2=${mvModel.r2.toFixed(3)}, n=${mvModel.n}` : 'N/A';
-  const indivList = indivMetrics.map(m => `${m} (R\u00b2=${indivModels[m].r2.toFixed(3)})`).join(', ');
   html += `<div class="tab-help" style="margin-top:12px">
-    <b style="color:#38a169">Multivariate model:</b> Single regression using all selected metrics simultaneously (${mvR2}).<br>
-    <b style="color:#3182ce">Weighted average:</b> Blends individual metric predictions weighted by their R\u00b2.<br>
-    <b>Metrics:</b> ${indivList}<br>
+    <b>Model:</b> Multivariate regression using all selected metrics simultaneously (R\u00b2=${mvModel.r2.toFixed(3)}, trained on ${mvModel.n} pitcher-seasons).<br>
+    <b>Metrics:</b> ${metrics.join(', ')}<br>
     ${sorted.length > 300 ? `Showing 300 of ${sorted.length} pitchers.` : `${sorted.length} pitchers.`}
   </div>`;
 
