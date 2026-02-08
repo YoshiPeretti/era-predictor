@@ -358,7 +358,6 @@ table.data-table tbody tr:hover { background: #f7fafc; }
       <button class="tab-btn active" data-tab="r2bar">R&sup2; Comparison</button>
       <button class="tab-btn" data-tab="scatter">Scatter Plots</button>
       <button class="tab-btn" data-tab="ipline">R&sup2; by IP Threshold</button>
-      <button class="tab-btn" data-tab="table">Data Table</button>
       <button class="tab-btn" data-tab="projections">2026 Projections</button>
     </div>
     <div class="tab-content">
@@ -379,9 +378,6 @@ table.data-table tbody tr:hover { background: #f7fafc; }
           Shows how R&sup2; changes as you raise the IP minimum.
           Higher IP filters = smaller sample but less noise.
         </div>
-      </div>
-      <div class="tab-pane" id="tab-table">
-        <div class="data-table-wrap" id="table-wrap"></div>
       </div>
       <div class="tab-pane" id="tab-projections">
         <div id="proj-wrap"></div>
@@ -715,89 +711,7 @@ function renderIPLine() {
 }
 
 // ── Tab 4: Data Table ───────────────────────────────────────────────────────
-let tableSortCol = null;
-let tableSortAsc = true;
-
-function renderTable() {
-  const data = filterData();
-  const cols = [
-    { key: 'Name', label: 'Name', fmt: v => v },
-    { key: 'Season', label: 'Season', fmt: v => v },
-    { key: 'IP', label: 'IP', fmt: v => v == null ? '' : v.toFixed(1) },
-    { key: 'ERA', label: 'ERA', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'FIP', label: 'FIP', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'xFIP', label: 'xFIP', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'SIERA', label: 'SIERA', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'xERA', label: 'xERA', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'K9', label: 'K/9', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'BB9', label: 'BB/9', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'HR9', label: 'HR/9', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'LOB', label: 'LOB%', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'KBB', label: 'K-BB%', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'Stuff', label: 'Stuff+', fmt: v => v == null ? '' : v.toFixed(0) },
-    { key: 'Location', label: 'Location+', fmt: v => v == null ? '' : v.toFixed(0) },
-    { key: 'Pitching', label: 'Pitching+', fmt: v => v == null ? '' : v.toFixed(0) },
-    { key: 'ERA_next', label: 'ERA (N+1)', fmt: v => v == null ? '' : v.toFixed(2) },
-    { key: 'IP_next', label: 'IP (N+1)', fmt: v => v == null ? '' : v.toFixed(1) },
-  ];
-
-  // Sort
-  let sorted = [...data];
-  if (tableSortCol !== null) {
-    const col = cols[tableSortCol];
-    sorted.sort((a, b) => {
-      let va = a[col.key], vb = b[col.key];
-      if (va == null && vb == null) return 0;
-      if (va == null) return 1;
-      if (vb == null) return -1;
-      if (typeof va === 'string') return tableSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
-      return tableSortAsc ? va - vb : vb - va;
-    });
-  }
-
-  // Build HTML
-  let html = '<table class="data-table"><thead><tr>';
-  cols.forEach((col, i) => {
-    let cls = '';
-    let arrow = '↕';
-    if (tableSortCol === i) {
-      cls = tableSortAsc ? 'sort-asc' : 'sort-desc';
-      arrow = tableSortAsc ? '↑' : '↓';
-    }
-    html += `<th class="${cls}" onclick="sortTable(${i})">${col.label}<span class="sort-arrow">${arrow}</span></th>`;
-  });
-  html += '</tr></thead><tbody>';
-
-  // Limit display to 500 rows for performance, show count
-  const display = sorted.slice(0, 500);
-  for (const row of display) {
-    html += '<tr>';
-    for (const col of cols) {
-      html += `<td>${col.fmt(row[col.key])}</td>`;
-    }
-    html += '</tr>';
-  }
-  html += '</tbody></table>';
-  if (sorted.length > 500) {
-    html += `<div class="tab-help" style="margin-top:8px">Showing 500 of ${sorted.length} rows. Adjust filters to narrow results.</div>`;
-  } else {
-    html += `<div class="tab-help" style="margin-top:8px">${sorted.length} pitcher-seasons</div>`;
-  }
-
-  document.getElementById('table-wrap').innerHTML = html;
-}
-
-function sortTable(colIdx) {
-  if (tableSortCol === colIdx) {
-    tableSortAsc = !tableSortAsc;
-  } else {
-    tableSortCol = colIdx;
-    tableSortAsc = true;
-  }
-  renderTable();
-}
-
-// ── Tab 5: 2026 Projections ─────────────────────────────────────────────────
+// ── Tab 4: 2026 Projections ─────────────────────────────────────────────────
 let projSortCol = null;
 let projSortAsc = true;
 
@@ -939,7 +853,6 @@ function renderActiveTab() {
   if (tab === 'r2bar') renderR2Bar();
   else if (tab === 'scatter') renderScatters();
   else if (tab === 'ipline') renderIPLine();
-  else if (tab === 'table') renderTable();
   else if (tab === 'projections') renderProjections();
 }
 
