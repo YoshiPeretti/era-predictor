@@ -198,6 +198,19 @@ body {
 .tab-pane { display: none; }
 .tab-pane.active { display: block; }
 
+.meth-content { max-width: 800px; line-height: 1.7; color: #2d3748; }
+.meth-content h2 { font-size: 22px; font-weight: 700; color: #1a202c; margin-bottom: 8px; }
+.meth-content h3 { font-size: 17px; font-weight: 700; color: #2d3748; margin-top: 28px; margin-bottom: 6px; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+.meth-content h4 { font-size: 14px; font-weight: 600; color: #4a5568; margin-bottom: 2px; }
+.meth-content p { font-size: 14px; margin-bottom: 10px; }
+.meth-content ul { font-size: 14px; margin: 8px 0 10px 20px; }
+.meth-content li { margin-bottom: 6px; }
+.meth-section { margin-bottom: 16px; padding-left: 12px; border-left: 3px solid #e2e8f0; }
+.meth-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+.meth-table th { background: #f7fafc; text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #4a5568; }
+.meth-table td { padding: 8px 12px; border-bottom: 1px solid #edf2f7; vertical-align: top; }
+.meth-table tr:hover td { background: #f7fafc; }
+
 .tab-help {
   font-size: 13px;
   color: #718096;
@@ -359,6 +372,7 @@ table.data-table tbody tr:hover { background: #f7fafc; }
       <button class="tab-btn" data-tab="scatter">Scatter Plots</button>
       <button class="tab-btn" data-tab="ipline">R&sup2; by IP Threshold</button>
       <button class="tab-btn" data-tab="projections">2026 Projections</button>
+      <button class="tab-btn" data-tab="methodology">Methodology</button>
     </div>
     <div class="tab-content">
       <div class="tab-pane active" id="tab-r2bar">
@@ -381,6 +395,102 @@ table.data-table tbody tr:hover { background: #f7fafc; }
       </div>
       <div class="tab-pane" id="tab-projections">
         <div class="data-table-wrap" id="proj-wrap"></div>
+      </div>
+      <div class="tab-pane" id="tab-methodology">
+        <div class="meth-content">
+          <h2>How This Site Works</h2>
+          <p>This tool analyzes which pitching metrics from the current season best predict a pitcher's ERA the following season. It uses 10 years of MLB data (2015&ndash;2024) covering 5,788 pitcher-seasons, sourced from FanGraphs.</p>
+
+          <h3>The Tabs</h3>
+          <div class="meth-section">
+            <h4>R&sup2; Comparison</h4>
+            <p>Shows the R&sup2; (coefficient of determination) for each metric predicting next-year ERA. Each metric is tested individually using simple linear regression: how well does this year's FIP, for example, predict next year's ERA? The multivariate model's in-sample and backtested R&sup2; are also shown for comparison.</p>
+            <p>R&sup2; ranges from 0 to 1. An R&sup2; of 0.20 means the model explains 20% of the variance in next-year ERA. The remaining 80% is noise, luck, injury, and factors the model can't see.</p>
+          </div>
+
+          <div class="meth-section">
+            <h4>Scatter Plots</h4>
+            <p>Visualizes the relationship between each metric and next-year ERA. Each dot is a pitcher-season. The regression line shows the trend. More vertical spread = more noise = less predictive.</p>
+          </div>
+
+          <div class="meth-section">
+            <h4>R&sup2; by IP Threshold</h4>
+            <p>Shows how predictive power changes as you filter for pitchers with more innings. Higher IP thresholds give more stable statistics (less noise) but reduce sample size. This helps identify the tradeoff between data quality and quantity.</p>
+          </div>
+
+          <div class="meth-section">
+            <h4>2026 Projections</h4>
+            <p>Applies the optimized multivariate model to 2025 pitcher data to project 2026 ERA. The Diff column shows expected change from 2025, with green indicating improvement and red indicating regression.</p>
+          </div>
+
+          <h3>The Projection Model</h3>
+          <div class="meth-section">
+            <p>The 2026 projections use a multivariate linear regression model with six input metrics:</p>
+            <table class="meth-table">
+              <thead><tr><th>Metric</th><th>What It Measures</th><th>Why It's Included</th></tr></thead>
+              <tbody>
+                <tr><td><b>FIP</b></td><td>Fielding Independent Pitching &mdash; estimates ERA using only strikeouts, walks, hit-by-pitches, and home runs</td><td>Strips out defense and luck on balls in play. The single most predictive traditional metric for future ERA.</td></tr>
+                <tr><td><b>BB/9</b></td><td>Walks per 9 innings</td><td>Walk rate is one of the most stable pitcher skills year to year. High walk rates are a reliable predictor of future struggles.</td></tr>
+                <tr><td><b>HR/9</b></td><td>Home runs allowed per 9 innings</td><td>While HR/9 has some luck component (HR/FB rate fluctuates), the underlying skill of limiting hard fly balls persists.</td></tr>
+                <tr><td><b>K-BB%</b></td><td>Strikeout rate minus walk rate</td><td>The purest single measure of pitcher dominance. Combines the two most controllable outcomes into one number.</td></tr>
+                <tr><td><b>Stuff+</b></td><td>Statcast model rating pitch quality (velocity, movement, spin) on a 100-centered scale</td><td>Measures raw pitch quality independent of results. A pitcher with elite stuff but a high ERA is likely to improve.</td></tr>
+                <tr><td><b>Location+</b></td><td>Statcast model rating pitch location/command on a 100-centered scale</td><td>Measures where pitches end up in the zone. Together with Stuff+, captures the full picture of pitch-level skill.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Why These Six?</h3>
+          <div class="meth-section">
+            <p>These metrics were selected by testing every possible combination of 2&ndash;8 features from 13 candidates (ERA, FIP, xFIP, SIERA, xERA, K/9, BB/9, HR/9, LOB%, K-BB%, Stuff+, Location+, Pitching+) using <b>leave-one-year-out cross-validation</b>. Over 4,200 combinations were evaluated.</p>
+            <p>This combination produced the highest backtested R&sup2; (0.208) with a low overfitting gap (2.4%).</p>
+          </div>
+
+          <h3>What's NOT in the Model (and Why)</h3>
+          <div class="meth-section">
+            <table class="meth-table">
+              <thead><tr><th>Metric</th><th>Why It Was Dropped</th></tr></thead>
+              <tbody>
+                <tr><td><b>ERA</b></td><td>Too noisy. ERA is heavily influenced by BABIP luck, sequencing, and defense &mdash; none of which persist reliably. Removing ERA from the model actually <i>improved</i> backtested accuracy.</td></tr>
+                <tr><td><b>xFIP, SIERA, xERA</b></td><td>Redundant with FIP. These are all estimating the same underlying skill. Adding them increases overfitting without improving predictions.</td></tr>
+                <tr><td><b>LOB%</b></td><td>Mostly luck. Left-on-base percentage fluctuates year to year and doesn't carry predictive signal beyond what K-BB% and FIP already capture.</td></tr>
+                <tr><td><b>Pitching+</b></td><td>Pitching+ is a composite of Stuff+ and Location+, which are already in the model separately. Including it adds redundancy.</td></tr>
+                <tr><td><b>Barrel%, HardHit%, GB%</b></td><td>Tested via FanGraphs batted ball data. These contact quality metrics didn't improve predictions &mdash; Stuff+ and Location+ already capture the pitch-level skill that drives contact quality.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Backtesting: How We Know It Works</h3>
+          <div class="meth-section">
+            <p><b>In-sample R&sup2;</b> measures how well the model fits data it was trained on. This is always optimistic because the model can memorize noise in the training data.</p>
+            <p><b>Backtested R&sup2;</b> (leave-one-year-out cross-validation) gives the honest number. For each year in the dataset, the model is trained on all <i>other</i> years and then predicts the held-out year. The predictions are collected across all holdout years and scored. This simulates real-world use &mdash; predicting a year the model has never seen.</p>
+            <p>The <b>overfitting gap</b> (in-sample R&sup2; minus backtested R&sup2;) measures how much the model is fooling itself. A smaller gap means more trustworthy predictions. Our model's 2.4% gap is low, indicating stable generalization.</p>
+            <table class="meth-table">
+              <thead><tr><th>Model</th><th>In-Sample R&sup2;</th><th>Backtested R&sup2;</th><th>Gap</th></tr></thead>
+              <tbody>
+                <tr><td>All 13 metrics</td><td>0.240</td><td>0.145</td><td>9.5%</td></tr>
+                <tr><td>Optimized 6 metrics</td><td>0.232</td><td><b>0.208</b></td><td>2.4%</td></tr>
+                <tr><td>FIP alone</td><td>0.170</td><td>0.150</td><td>2.0%</td></tr>
+              </tbody>
+            </table>
+            <p>Fewer, better features beats more features. The 13-metric model looks best in-sample but performs worst on new data because it overfits.</p>
+          </div>
+
+          <h3>Limitations</h3>
+          <div class="meth-section">
+            <ul>
+              <li>The model explains ~20% of next-year ERA variance. The other ~80% is inherently unpredictable (luck, injury, mechanical changes, roster moves).</li>
+              <li>Predictions are compressed toward the mean &mdash; the model will never project a 1.80 or 7.00 ERA because extreme seasons require extreme luck in addition to skill.</li>
+              <li>Stuff+ and Location+ are only available from 2020 onward, which limits the training sample to ~400 pitcher-seasons at 80+ IP.</li>
+              <li>The model doesn't account for age, injury history, team changes, or role changes (starter vs. reliever).</li>
+              <li>Average prediction error (MAE) is approximately 0.70 ERA, which is comparable to professional projection systems.</li>
+            </ul>
+          </div>
+
+          <h3>Data Sources</h3>
+          <div class="meth-section">
+            <p>All pitcher data sourced from <a href="https://www.fangraphs.com" target="_blank" style="color:#3182ce">FanGraphs</a> via the baseballr R package. Stuff+, Location+, and Pitching+ are derived from MLB Statcast pitch-tracking data. The dataset covers 5,788 pitcher-seasons from 2015&ndash;2024, with 873 pitchers in the 2025 projection pool.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
