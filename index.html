@@ -787,21 +787,32 @@ function renderProjections() {
     return;
   }
 
-  // ── Multivariate model ──
+  // ── Multivariate model (user-selected metrics) ──
   const mvModel = metrics.length >= 2 ? multiReg(histData, metrics) : null;
 
-  if (!mvModel) {
+  // ── Optimized model (backtested best combo) ──
+  const OPT_METRICS = ['FIP', 'BB/9', 'HR/9', 'K-BB%', 'Stuff+', 'Location+'];
+  const optModel = multiReg(histData, OPT_METRICS);
+
+  if (!mvModel && !optModel) {
     document.getElementById('proj-wrap').innerHTML =
       '<div class="loading">Select at least 2 metrics to build a multivariate model.</div>';
     return;
   }
 
-  // For each current pitcher, compute prediction
+  // For each current pitcher, compute predictions from both models
   const rows = [];
   for (const p of current) {
-    const projMv = multiPredict(mvModel, p);
-    if (projMv == null) continue;
-    rows.push({ ...p, projMv, diff: projMv - p.ERA });
+    const projMv = mvModel ? multiPredict(mvModel, p) : null;
+    const projOpt = optModel ? multiPredict(optModel, p) : null;
+    if (projMv == null && projOpt == null) continue;
+    rows.push({
+      ...p,
+      projMv,
+      diff: projMv != null ? projMv - p.ERA : null,
+      projOpt,
+      diffOpt: projOpt != null ? projOpt - p.ERA : null,
+    });
   }
 
   // Define columns
@@ -810,8 +821,10 @@ function renderProjections() {
     { key: 'Name', label: 'Name', fmt: v => v },
     { key: 'IP', label: 'IP', fmt: v => v == null ? '' : v.toFixed(1) },
     { key: 'ERA', label: '2025 ERA', fmt: fmtEra },
-    { key: 'projMv', label: 'Proj. 2026 ERA', fmt: fmtEra, highlight: 'mv' },
+    { key: 'projMv', label: 'Selected Model', fmt: fmtEra, highlight: 'mv' },
     { key: 'diff', label: 'Diff', fmt: v => v == null ? '' : (v > 0 ? '+' : '') + v.toFixed(2), highlight: 'diff' },
+    { key: 'projOpt', label: 'Optimized Model', fmt: v => v == null ? '—' : v.toFixed(2), highlight: 'opt' },
+    { key: 'diffOpt', label: 'Diff', fmt: v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(2), highlight: 'diffOpt' },
     { key: 'FIP', label: 'FIP', fmt: fmtEra },
     { key: 'xFIP', label: 'xFIP', fmt: fmtEra },
     { key: 'SIERA', label: 'SIERA', fmt: fmtEra },
@@ -843,7 +856,9 @@ function renderProjections() {
   // Build HTML
   const hlStyles = {
     mv:  { th: 'background:#f0fff4', td: 'font-weight:600;background:#f0fff4' },
-    diff: { th: 'background:#fffbf0', td: '' }
+    diff: { th: 'background:#fffbf0', td: '' },
+    opt: { th: 'background:#fff8f0', td: 'font-weight:600;background:#fff8f0' },
+    diffOpt: { th: 'background:#fff8f0', td: '' },
   };
 
   let html = '<table class="data-table"><thead><tr>';
@@ -868,6 +883,10 @@ function renderProjections() {
         const color = row.diff < 0 ? '#1a7f37' : row.diff > 0 ? '#cf222e' : '#666';
         style = `font-weight:600;color:${color};background:#fffbf0`;
       }
+      if (col.key === 'diffOpt' && row.diffOpt != null) {
+        const color = row.diffOpt < 0 ? '#1a7f37' : row.diffOpt > 0 ? '#cf222e' : '#666';
+        style = `font-weight:600;color:${color};background:#fff8f0`;
+      }
       const hl = style ? ` style="${style}"` : '';
       html += `<td${hl}>${col.fmt(row[col.key])}</td>`;
     }
@@ -876,9 +895,10 @@ function renderProjections() {
   html += '</tbody></table>';
 
   // Summary footer
+  const mvInfo = mvModel ? `<b>Selected Model:</b> ${metrics.join(', ')} (R\u00b2=${mvModel.r2.toFixed(3)}, n=${mvModel.n})` : '';
+  const optInfo = optModel ? `<b>Optimized Model:</b> FIP, BB/9, HR/9, K-BB%, Stuff+, Location+ (R\u00b2=${optModel.r2.toFixed(3)}, n=${optModel.n}) — best backtested combo` : '';
   html += `<div class="tab-help" style="margin-top:12px">
-    <b>Model:</b> Multivariate regression using all selected metrics simultaneously (R\u00b2=${mvModel.r2.toFixed(3)}, trained on ${mvModel.n} pitcher-seasons).<br>
-    <b>Metrics:</b> ${metrics.join(', ')}<br>
+    ${mvInfo}${mvInfo && optInfo ? '<br>' : ''}${optInfo}<br>
     ${sorted.length > 300 ? `Showing 300 of ${sorted.length} pitchers.` : `${sorted.length} pitchers.`}
   </div>`;
 
