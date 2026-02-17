@@ -1456,7 +1456,7 @@ function openPitcherCard(name) {
     font: { family: 'Inter, -apple-system, sans-serif' },
     showlegend: false,
   };
-  Plotly.newPlot('card-radar', [radarTrace], radarLayout, { displayModeBar: false, responsive: true });
+  Plotly.newPlot('card-radar', [radarTrace], radarLayout, { displayModeBar: false, responsive: true, staticPlot: true });
 
   document.getElementById('pitcher-modal').classList.add('open');
   document.addEventListener('keydown', cardEscHandler);
