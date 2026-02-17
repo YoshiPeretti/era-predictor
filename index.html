@@ -498,6 +498,41 @@ function multiPredict(model, row) {
   return pred;
 }
 
+// ── Backtested multivariate model (leave-one-year-out cross-validation) ──
+function multiRegCV(data, metrics) {
+  const years = [...new Set(data.map(r => r.Season))].sort((a, b) => a - b);
+  if (years.length < 3) return null;
+
+  const allActual = [];
+  const allPred = [];
+
+  for (const holdout of years) {
+    const train = data.filter(r => r.Season !== holdout);
+    const test = data.filter(r => r.Season === holdout);
+    const model = multiReg(train, metrics);
+    if (!model) continue;
+
+    for (const row of test) {
+      if (row.ERA_next == null) continue;
+      const pred = multiPredict(model, row);
+      if (pred == null) continue;
+      allActual.push(row.ERA_next);
+      allPred.push(pred);
+    }
+  }
+
+  if (allActual.length < 10) return null;
+
+  const meanY = allActual.reduce((a, b) => a + b, 0) / allActual.length;
+  let ssTot = 0, ssRes = 0;
+  for (let i = 0; i < allActual.length; i++) {
+    ssRes += (allActual[i] - allPred[i]) ** 2;
+    ssTot += (allActual[i] - meanY) ** 2;
+  }
+
+  return { r2: 1 - ssRes / ssTot, n: allActual.length, years: years.length };
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function getVal(row, metric) {
   const key = METRIC_MAP[metric];
@@ -542,9 +577,24 @@ function renderR2Bar() {
     const xs = data.map(r => getVal(r, m));
     const ys = data.map(r => r.ERA_next);
     const reg = linReg(xs, ys);
-    if (reg.n >= 5) results.push({ metric: m, r2: reg.r2 });
+    if (reg.n >= 5) results.push({ metric: m, r2: reg.r2, type: 'single' });
   }
+
+  // Add multivariate model R² (in-sample and backtested)
+  if (metrics.length >= 2) {
+    const mvModel = multiReg(data, metrics);
+    if (mvModel) results.push({ metric: 'Multivariate (in-sample)', r2: mvModel.r2, type: 'mv-in' });
+    const cv = multiRegCV(data, metrics);
+    if (cv) results.push({ metric: 'Multivariate (backtested)', r2: cv.r2, type: 'mv-cv' });
+  }
+
   results.sort((a, b) => a.r2 - b.r2);
+
+  const barColors = results.map(r => {
+    if (r.type === 'mv-in') return '#b8860b';
+    if (r.type === 'mv-cv') return '#daa520';
+    return METRIC_COLORS[r.metric] || '#3182ce';
+  });
 
   const trace = {
     type: 'bar',
@@ -554,7 +604,7 @@ function renderR2Bar() {
     text: results.map(r => r.r2.toFixed(3)),
     textposition: 'outside',
     textfont: { size: 12, color: '#2d3748', family: 'Inter, sans-serif' },
-    marker: { color: results.map(r => METRIC_COLORS[r.metric] || '#3182ce') },
+    marker: { color: barColors },
     hovertemplate: '%{y}: R²=%{x:.3f}<extra></extra>'
   };
 
@@ -574,13 +624,21 @@ function renderR2Bar() {
   Plotly.newPlot('r2-chart', [trace], layout, { displayModeBar: false, responsive: true });
 
   // Summary banner
-  if (results.length >= 4) {
-    const top2 = results.slice(-2).reverse().map(r => r.metric).join(' & ');
-    const bot2 = results.slice(0, 2).map(r => r.metric).join(' & ');
+  const singles = results.filter(r => r.type === 'single');
+  if (singles.length >= 4) {
+    const top2 = singles.slice(-2).reverse().map(r => r.metric).join(' & ');
+    const bot2 = singles.slice(0, 2).map(r => r.metric).join(' & ');
+    const cvEntry = results.find(r => r.type === 'mv-cv');
+    const inEntry = results.find(r => r.type === 'mv-in');
+    let mvNote = '';
+    if (cvEntry && inEntry) {
+      const gap = ((inEntry.r2 - cvEntry.r2) * 100).toFixed(1);
+      mvNote = `<span class="r2-sep">&middot;</span><span style="color:#b8860b">Multivariate overfitting gap: ${gap}%</span>`;
+    }
     document.getElementById('r2-summary').innerHTML =
       `<div class="r2-summary"><span class="r2-best">Most predictive: ${top2}</span>` +
       `<span class="r2-sep">&middot;</span>` +
-      `<span class="r2-worst">Least predictive: ${bot2}</span></div>`;
+      `<span class="r2-worst">Least predictive: ${bot2}</span>${mvNote}</div>`;
   } else {
     document.getElementById('r2-summary').innerHTML = '';
   }
