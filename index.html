@@ -743,7 +743,7 @@ function renderProjections() {
   for (const p of current) {
     const projMv = multiPredict(mvModel, p);
     if (projMv == null) continue;
-    rows.push({ ...p, projMv });
+    rows.push({ ...p, projMv, diff: projMv - p.ERA });
   }
 
   // Define columns
@@ -753,6 +753,7 @@ function renderProjections() {
     { key: 'IP', label: 'IP', fmt: v => v == null ? '' : v.toFixed(1) },
     { key: 'ERA', label: '2025 ERA', fmt: fmtEra },
     { key: 'projMv', label: 'Proj. 2026 ERA', fmt: fmtEra, highlight: 'mv' },
+    { key: 'diff', label: 'Diff', fmt: v => v == null ? '' : (v > 0 ? '+' : '') + v.toFixed(2), highlight: 'diff' },
     { key: 'FIP', label: 'FIP', fmt: fmtEra },
     { key: 'xFIP', label: 'xFIP', fmt: fmtEra },
     { key: 'SIERA', label: 'SIERA', fmt: fmtEra },
@@ -783,7 +784,8 @@ function renderProjections() {
 
   // Build HTML
   const hlStyles = {
-    mv:  { th: 'background:#f0fff4', td: 'font-weight:600;background:#f0fff4' }
+    mv:  { th: 'background:#f0fff4', td: 'font-weight:600;background:#f0fff4' },
+    diff: { th: 'background:#fffbf0', td: '' }
   };
 
   let html = '<table class="data-table"><thead><tr>';
@@ -803,7 +805,12 @@ function renderProjections() {
   for (const row of display) {
     html += '<tr>';
     for (const col of cols) {
-      const hl = col.highlight ? ` style="${hlStyles[col.highlight].td}"` : '';
+      let style = col.highlight ? hlStyles[col.highlight].td : '';
+      if (col.key === 'diff' && row.diff != null) {
+        const color = row.diff < 0 ? '#1a7f37' : row.diff > 0 ? '#cf222e' : '#666';
+        style = `font-weight:600;color:${color};background:#fffbf0`;
+      }
+      const hl = style ? ` style="${style}"` : '';
       html += `<td${hl}>${col.fmt(row[col.key])}</td>`;
     }
     html += '</tr>';
