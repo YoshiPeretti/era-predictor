@@ -313,6 +313,132 @@ table.data-table tbody td {
 }
 table.data-table tbody tr:hover { background: #f7fafc; }
 
+/* Pitcher detail modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+
+.pitcher-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+  max-width: 720px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  animation: cardSlideIn 0.25s ease-out;
+}
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.card-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(0,0,0,0.06);
+  border-radius: 50%;
+  font-size: 18px;
+  color: #718096;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  z-index: 2;
+}
+.card-close:hover { background: rgba(0,0,0,0.12); color: #2d3748; }
+
+.card-header {
+  padding: 28px 32px 0;
+}
+.card-name {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a202c;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+.card-meta {
+  font-size: 14px;
+  color: #718096;
+  margin-top: 4px;
+}
+
+.card-projection {
+  margin: 16px 32px 0;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f0fff4, #f7fafc);
+  border-radius: 10px;
+  border: 1px solid #c6f6d5;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.card-proj-item { text-align: center; }
+.card-proj-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #718096; }
+.card-proj-val { font-size: 28px; font-weight: 700; color: #1a202c; line-height: 1.2; }
+.card-proj-val.green { color: #1a7f37; }
+.card-proj-val.red { color: #cf222e; }
+.card-proj-arrow { font-size: 24px; color: #a0aec0; }
+
+.card-body { padding: 20px 32px 28px; }
+
+.card-radar { width: 100%; height: 280px; margin-bottom: 16px; }
+
+.card-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.card-stat {
+  background: #f7fafc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.card-stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #a0aec0; }
+.card-stat-val { font-size: 18px; font-weight: 700; color: #2d3748; margin-top: 2px; }
+.card-stat.elite { border-left: 3px solid #38a169; }
+.card-stat.poor { border-left: 3px solid #e53e3e; }
+
+.card-scouting { margin-top: 16px; }
+.card-scouting h4 { font-size: 14px; font-weight: 700; color: #2d3748; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+.card-scouting p { font-size: 14px; color: #4a5568; line-height: 1.7; margin-bottom: 12px; }
+.card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.card-tag {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.2px;
+}
+.card-tag.strength { background: #f0fff4; color: #22543d; border: 1px solid #c6f6d5; }
+.card-tag.weakness { background: #fff5f5; color: #742a2a; border: 1px solid #fed7d7; }
+
+.name-link {
+  color: #2c5282;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 500;
+}
+.name-link:hover { text-decoration: underline; }
+
 /* Loading state */
 .loading {
   text-align: center;
@@ -535,6 +661,10 @@ table.data-table tbody tr:hover { background: #f7fafc; }
       </div>
     </div>
   </div>
+</div>
+
+<div class="modal-overlay" id="pitcher-modal" onclick="if(event.target===this)closePitcherCard()">
+  <div class="pitcher-card" id="pitcher-card"></div>
 </div>
 
 <footer class="site-footer">
@@ -929,6 +1059,7 @@ function renderIPLine() {
 // ── Tab 4: 2026 Projections ─────────────────────────────────────────────────
 let projSortCol = null;
 let projSortAsc = true;
+let projRows = []; // stored for pitcher card lookup
 
 function renderProjections() {
   const histData = filterData();
@@ -966,10 +1097,12 @@ function renderProjections() {
     });
   }
 
+  projRows = rows; // save for pitcher card
+
   // Define columns
   const fmtEra = v => v == null ? '' : v.toFixed(2);
   const cols = [
-    { key: 'Name', label: 'Name', fmt: v => v },
+    { key: 'Name', label: 'Name', fmt: v => `<span class="name-link" onclick="openPitcherCard('${(v||'').replace(/'/g, "\\'")}')">${v}</span>` },
     { key: 'IP', label: 'IP', fmt: v => v == null ? '' : v.toFixed(1) },
     { key: 'ERA', label: '2025 ERA', fmt: fmtEra },
     { key: 'projOpt', label: 'Proj. 2026 ERA', fmt: fmtEra, highlight: 'opt' },
@@ -1075,6 +1208,226 @@ function filterProjTable() {
   });
   document.getElementById('proj-count').textContent = query ? `${shown} matching` : '';
 }
+
+// ── Pitcher Detail Card ──────────────────────────────────────────────────────
+function openPitcherCard(name) {
+  const p = projRows.find(r => r.Name === name);
+  if (!p) return;
+
+  // Compute league averages from projRows for percentile context
+  const avg = {};
+  const statKeys = ['ERA','FIP','xFIP','SIERA','xERA','K9','BB9','HR9','LOB','KBB','Stuff','Location','Pitching'];
+  for (const k of statKeys) {
+    const vals = projRows.map(r => r[k]).filter(v => v != null);
+    avg[k] = vals.length ? vals.reduce((a,b) => a+b,0) / vals.length : null;
+  }
+
+  // Percentile rank (0-100, higher = better for the pitcher)
+  function pctRank(key, val, lowerIsBetter) {
+    if (val == null) return null;
+    const vals = projRows.map(r => r[key]).filter(v => v != null);
+    if (!vals.length) return null;
+    const rank = lowerIsBetter
+      ? vals.filter(v => v > val).length / vals.length
+      : vals.filter(v => v < val).length / vals.length;
+    return Math.round(rank * 100);
+  }
+
+  const pcts = {
+    ERA: pctRank('ERA', p.ERA, true),
+    FIP: pctRank('FIP', p.FIP, true),
+    xFIP: pctRank('xFIP', p.xFIP, true),
+    SIERA: pctRank('SIERA', p.SIERA, true),
+    xERA: pctRank('xERA', p.xERA, true),
+    'K/9': pctRank('K9', p.K9, false),
+    'BB/9': pctRank('BB9', p.BB9, true),
+    'HR/9': pctRank('HR9', p.HR9, true),
+    'K-BB%': pctRank('KBB', p.KBB, false),
+    'Stuff+': pctRank('Stuff', p.Stuff, false),
+    'Location+': pctRank('Location', p.Location, false),
+    'Pitching+': pctRank('Pitching', p.Pitching, false),
+  };
+
+  // Grade label
+  function grade(pct) {
+    if (pct == null) return { label: '—', cls: '' };
+    if (pct >= 90) return { label: 'Elite', cls: 'elite' };
+    if (pct >= 70) return { label: 'Good', cls: 'elite' };
+    if (pct >= 40) return { label: 'Avg', cls: '' };
+    if (pct >= 20) return { label: 'Below Avg', cls: 'poor' };
+    return { label: 'Poor', cls: 'poor' };
+  }
+
+  // Build stats grid
+  const stats = [
+    { label: 'ERA', val: p.ERA?.toFixed(2), pct: pcts.ERA },
+    { label: 'FIP', val: p.FIP?.toFixed(2), pct: pcts.FIP },
+    { label: 'xERA', val: p.xERA?.toFixed(2), pct: pcts.xERA },
+    { label: 'SIERA', val: p.SIERA?.toFixed(2), pct: pcts.SIERA },
+    { label: 'K/9', val: p.K9?.toFixed(1), pct: pcts['K/9'] },
+    { label: 'BB/9', val: p.BB9?.toFixed(1), pct: pcts['BB/9'] },
+    { label: 'HR/9', val: p.HR9?.toFixed(2), pct: pcts['HR/9'] },
+    { label: 'K-BB%', val: p.KBB != null ? (p.KBB * 100).toFixed(1) + '%' : '—', pct: pcts['K-BB%'] },
+    { label: 'Stuff+', val: p.Stuff?.toFixed(0) || '—', pct: pcts['Stuff+'] },
+    { label: 'Location+', val: p.Location?.toFixed(0) || '—', pct: pcts['Location+'] },
+    { label: 'Pitching+', val: p.Pitching?.toFixed(0) || '—', pct: pcts['Pitching+'] },
+    { label: 'LOB%', val: p.LOB != null ? (p.LOB * 100).toFixed(1) + '%' : '—', pct: null },
+  ];
+
+  let statsHtml = '';
+  for (const s of stats) {
+    const g = grade(s.pct);
+    statsHtml += `<div class="card-stat ${g.cls}"><div class="card-stat-label">${s.label}</div><div class="card-stat-val">${s.val}</div></div>`;
+  }
+
+  // Strengths & weaknesses
+  const strengths = [], weaknesses = [];
+  const traitMap = [
+    { key: 'K/9', pct: pcts['K/9'], good: 'Elite strikeout rate', bad: 'Low strikeout rate' },
+    { key: 'BB/9', pct: pcts['BB/9'], good: 'Excellent walk rate', bad: 'Walks too many batters' },
+    { key: 'HR/9', pct: pcts['HR/9'], good: 'Keeps the ball in the park', bad: 'Home run prone' },
+    { key: 'K-BB%', pct: pcts['K-BB%'], good: 'Dominant K-BB%', bad: 'Poor K-BB%' },
+    { key: 'Stuff+', pct: pcts['Stuff+'], good: 'Plus stuff', bad: 'Below-average stuff' },
+    { key: 'Location+', pct: pcts['Location+'], good: 'Pinpoint command', bad: 'Command issues' },
+    { key: 'FIP', pct: pcts.FIP, good: 'Strong underlying performance', bad: 'Weak underlying performance' },
+  ];
+  for (const t of traitMap) {
+    if (t.pct == null) continue;
+    if (t.pct >= 75) strengths.push(t.good);
+    else if (t.pct <= 25) weaknesses.push(t.bad);
+  }
+
+  let tagsHtml = '';
+  for (const s of strengths) tagsHtml += `<span class="card-tag strength">${s}</span>`;
+  for (const w of weaknesses) tagsHtml += `<span class="card-tag weakness">${w}</span>`;
+
+  // Generate scouting report text
+  let report = '';
+  const ip = p.IP?.toFixed(0) || '?';
+  const role = p.IP >= 140 ? 'starter' : p.IP >= 80 ? 'swingman' : 'reliever';
+
+  // Pitching style
+  const highK = pcts['K/9'] >= 65;
+  const lowBB = pcts['BB/9'] >= 65;
+  const groundball = p.LOB != null && p.LOB > 0.76;
+  const goodStuff = pcts['Stuff+'] >= 65;
+  const goodLoc = pcts['Location+'] >= 65;
+
+  if (highK && lowBB) {
+    report += `${name} is a high-efficiency ${role} who misses bats and controls the zone. `;
+  } else if (highK && !lowBB) {
+    report += `${name} is a power ${role} who generates a lot of swings and misses but can be wild at times. `;
+  } else if (!highK && lowBB) {
+    report += `${name} is a command-oriented ${role} who limits free passes but doesn't overpower hitters. `;
+  } else {
+    report += `${name} is a ${role} who relies on contact management and run prevention rather than dominant stuff. `;
+  }
+
+  if (goodStuff && goodLoc) {
+    report += 'The pitch-level data backs up the results — both stuff quality and location grade out well. ';
+  } else if (goodStuff && !goodLoc) {
+    report += 'The raw stuff is there, but the command can be inconsistent, suggesting upside if the control tightens. ';
+  } else if (!goodStuff && goodLoc) {
+    report += 'Succeeds more through precision than pure stuff — knows how to locate and keep hitters off balance. ';
+  }
+
+  // ERA vs peripherals
+  if (p.ERA != null && p.FIP != null) {
+    const gap = p.ERA - p.FIP;
+    if (gap > 0.5) {
+      report += `The ${gap.toFixed(2)} ERA-FIP gap suggests some bad luck or poor defense — the underlying skills are better than the ERA shows. `;
+    } else if (gap < -0.5) {
+      report += `The ERA has been ${Math.abs(gap).toFixed(2)} runs better than FIP, which often signals regression — some good fortune on balls in play. `;
+    }
+  }
+
+  // Projection context
+  const diff = p.projOpt - p.ERA;
+  if (diff < -0.3) {
+    report += `The model projects meaningful improvement in 2026, driven by skill metrics that outpace the current ERA.`;
+  } else if (diff > 0.3) {
+    report += `The model projects some regression in 2026, as the peripherals suggest the current ERA may be hard to sustain.`;
+  } else {
+    report += `The model expects a similar level of performance in 2026 — the current ERA is well-supported by the underlying metrics.`;
+  }
+
+  // Diff display
+  const diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);
+  const diffCls = diff < 0 ? 'green' : diff > 0 ? 'red' : '';
+
+  // Radar chart data (6 key metrics, normalized to percentile)
+  const radarMetrics = ['K/9', 'BB/9', 'HR/9', 'K-BB%', 'Stuff+', 'Location+'];
+  const radarVals = radarMetrics.map(m => pcts[m] ?? 50);
+  const radarLabels = radarMetrics.map((m, i) => `${m}: ${radarVals[i]}th`);
+
+  const card = document.getElementById('pitcher-card');
+  card.innerHTML = `
+    <button class="card-close" onclick="closePitcherCard()">&times;</button>
+    <div class="card-header">
+      <h2 class="card-name">${name}</h2>
+      <div class="card-meta">${ip} IP in 2025 &middot; ${role.charAt(0).toUpperCase() + role.slice(1)}</div>
+    </div>
+    <div class="card-projection">
+      <div class="card-proj-item">
+        <div class="card-proj-label">2025 ERA</div>
+        <div class="card-proj-val">${p.ERA?.toFixed(2) || '—'}</div>
+      </div>
+      <div class="card-proj-arrow">&rarr;</div>
+      <div class="card-proj-item">
+        <div class="card-proj-label">Proj. 2026</div>
+        <div class="card-proj-val">${p.projOpt?.toFixed(2) || '—'}</div>
+      </div>
+      <div class="card-proj-item" style="margin-left:auto">
+        <div class="card-proj-label">Change</div>
+        <div class="card-proj-val ${diffCls}">${diffStr}</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-radar" id="card-radar"></div>
+      <div class="card-stats-grid">${statsHtml}</div>
+      <div class="card-scouting">
+        <h4>Scouting Report</h4>
+        <div class="card-tags">${tagsHtml}</div>
+        <p>${report}</p>
+      </div>
+    </div>
+  `;
+
+  // Render radar chart
+  const radarTrace = {
+    type: 'scatterpolar',
+    r: [...radarVals, radarVals[0]],
+    theta: [...radarMetrics, radarMetrics[0]],
+    fill: 'toself',
+    fillcolor: 'rgba(44,82,130,0.15)',
+    line: { color: '#2c5282', width: 2 },
+    marker: { size: 6, color: '#2c5282' },
+    text: [...radarLabels, radarLabels[0]],
+    hoverinfo: 'text',
+  };
+  const radarLayout = {
+    polar: {
+      radialaxis: { visible: true, range: [0, 100], tickvals: [25, 50, 75], ticktext: ['25th', '50th', '75th'], tickfont: { size: 10, color: '#a0aec0' }, gridcolor: '#e2e8f0' },
+      angularaxis: { tickfont: { size: 12, color: '#4a5568', family: 'Inter, sans-serif' }, gridcolor: '#e2e8f0' }
+    },
+    margin: { l: 60, r: 60, t: 30, b: 30 },
+    height: 280,
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { family: 'Inter, -apple-system, sans-serif' },
+    showlegend: false,
+  };
+  Plotly.newPlot('card-radar', [radarTrace], radarLayout, { displayModeBar: false, responsive: true });
+
+  document.getElementById('pitcher-modal').classList.add('open');
+  document.addEventListener('keydown', cardEscHandler);
+}
+
+function closePitcherCard() {
+  document.getElementById('pitcher-modal').classList.remove('open');
+  document.removeEventListener('keydown', cardEscHandler);
+}
+function cardEscHandler(e) { if (e.key === 'Escape') closePitcherCard(); }
 
 // ── Tab switching ───────────────────────────────────────────────────────────
 const tabBtns = document.querySelectorAll('.tab-btn');
