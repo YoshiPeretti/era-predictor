@@ -787,31 +787,25 @@ function renderProjections() {
     return;
   }
 
-  // ── Multivariate model (user-selected metrics) ──
-  const mvModel = metrics.length >= 2 ? multiReg(histData, metrics) : null;
-
   // ── Optimized model (backtested best combo) ──
   const OPT_METRICS = ['FIP', 'BB/9', 'HR/9', 'K-BB%', 'Stuff+', 'Location+'];
   const optModel = multiReg(histData, OPT_METRICS);
 
-  if (!mvModel && !optModel) {
+  if (!optModel) {
     document.getElementById('proj-wrap').innerHTML =
-      '<div class="loading">Select at least 2 metrics to build a multivariate model.</div>';
+      '<div class="loading">Not enough data to build the model. Try adjusting the year range.</div>';
     return;
   }
 
-  // For each current pitcher, compute predictions from both models
+  // For each current pitcher, compute prediction
   const rows = [];
   for (const p of current) {
-    const projMv = mvModel ? multiPredict(mvModel, p) : null;
-    const projOpt = optModel ? multiPredict(optModel, p) : null;
-    if (projMv == null && projOpt == null) continue;
+    const projOpt = multiPredict(optModel, p);
+    if (projOpt == null) continue;
     rows.push({
       ...p,
-      projMv,
-      diff: projMv != null ? projMv - p.ERA : null,
       projOpt,
-      diffOpt: projOpt != null ? projOpt - p.ERA : null,
+      diffOpt: projOpt - p.ERA,
     });
   }
 
@@ -821,10 +815,8 @@ function renderProjections() {
     { key: 'Name', label: 'Name', fmt: v => v },
     { key: 'IP', label: 'IP', fmt: v => v == null ? '' : v.toFixed(1) },
     { key: 'ERA', label: '2025 ERA', fmt: fmtEra },
-    { key: 'projMv', label: 'Selected Model', fmt: fmtEra, highlight: 'mv' },
-    { key: 'diff', label: 'Diff', fmt: v => v == null ? '' : (v > 0 ? '+' : '') + v.toFixed(2), highlight: 'diff' },
-    { key: 'projOpt', label: 'Optimized Model', fmt: v => v == null ? '—' : v.toFixed(2), highlight: 'opt' },
-    { key: 'diffOpt', label: 'Diff', fmt: v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(2), highlight: 'diffOpt' },
+    { key: 'projOpt', label: 'Proj. 2026 ERA', fmt: fmtEra, highlight: 'opt' },
+    { key: 'diffOpt', label: 'Diff', fmt: v => v == null ? '' : (v > 0 ? '+' : '') + v.toFixed(2), highlight: 'diffOpt' },
     { key: 'FIP', label: 'FIP', fmt: fmtEra },
     { key: 'xFIP', label: 'xFIP', fmt: fmtEra },
     { key: 'SIERA', label: 'SIERA', fmt: fmtEra },
@@ -855,10 +847,8 @@ function renderProjections() {
 
   // Build HTML
   const hlStyles = {
-    mv:  { th: 'background:#f0fff4', td: 'font-weight:600;background:#f0fff4' },
-    diff: { th: 'background:#fffbf0', td: '' },
-    opt: { th: 'background:#fff8f0', td: 'font-weight:600;background:#fff8f0' },
-    diffOpt: { th: 'background:#fff8f0', td: '' },
+    opt: { th: 'background:#f0fff4', td: 'font-weight:600;background:#f0fff4' },
+    diffOpt: { th: 'background:#fffbf0', td: '' },
   };
 
   let html = '<table class="data-table"><thead><tr>';
@@ -879,13 +869,9 @@ function renderProjections() {
     html += '<tr>';
     for (const col of cols) {
       let style = col.highlight ? hlStyles[col.highlight].td : '';
-      if (col.key === 'diff' && row.diff != null) {
-        const color = row.diff < 0 ? '#1a7f37' : row.diff > 0 ? '#cf222e' : '#666';
-        style = `font-weight:600;color:${color};background:#fffbf0`;
-      }
       if (col.key === 'diffOpt' && row.diffOpt != null) {
         const color = row.diffOpt < 0 ? '#1a7f37' : row.diffOpt > 0 ? '#cf222e' : '#666';
-        style = `font-weight:600;color:${color};background:#fff8f0`;
+        style = `font-weight:600;color:${color};background:#fffbf0`;
       }
       const hl = style ? ` style="${style}"` : '';
       html += `<td${hl}>${col.fmt(row[col.key])}</td>`;
@@ -895,10 +881,8 @@ function renderProjections() {
   html += '</tbody></table>';
 
   // Summary footer
-  const mvInfo = mvModel ? `<b>Selected Model:</b> ${metrics.join(', ')} (R\u00b2=${mvModel.r2.toFixed(3)}, n=${mvModel.n})` : '';
-  const optInfo = optModel ? `<b>Optimized Model:</b> FIP, BB/9, HR/9, K-BB%, Stuff+, Location+ (R\u00b2=${optModel.r2.toFixed(3)}, n=${optModel.n}) — best backtested combo` : '';
   html += `<div class="tab-help" style="margin-top:12px">
-    ${mvInfo}${mvInfo && optInfo ? '<br>' : ''}${optInfo}<br>
+    <b>Model:</b> FIP, BB/9, HR/9, K-BB%, Stuff+, Location+ (R\u00b2=${optModel.r2.toFixed(3)}, n=${optModel.n}) — best backtested combo<br>
     ${sorted.length > 300 ? `Showing 300 of ${sorted.length} pitchers.` : `${sorted.length} pitchers.`}
   </div>`;
 
