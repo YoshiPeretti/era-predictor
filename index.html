@@ -739,6 +739,30 @@ table.data-table tbody tr:hover { background: #edf2f7; }
             </ul>
           </div>
 
+          <h3>Injury Proneness Rating</h3>
+          <div class="meth-section">
+            <p>Each pitcher's scouting card includes an <b>Injury Proneness</b> score from 1&ndash;10, estimating durability risk based on historical workload patterns. This is <i>not</i> a medical assessment &mdash; it's a statistical proxy derived from IP (innings pitched) history across the 2015&ndash;2024 dataset.</p>
+            <p>The score starts at a baseline of <b>3</b> and adjusts based on five factors:</p>
+            <table class="meth-table">
+              <thead><tr><th>Factor</th><th>What It Captures</th><th>Impact on Score</th></tr></thead>
+              <tbody>
+                <tr><td><b>Large IP drops</b></td><td>Seasons where IP fell &gt;40% from the prior year (e.g., 180 IP &rarr; 90 IP)</td><td>+1.5 per occurrence. Drops of 25&ndash;40% add +0.5.</td></tr>
+                <tr><td><b>Low IP seasons</b></td><td>Years with &lt;60 IP when the pitcher's peak was &gt;120 IP</td><td>+0.7 per low season. Flags pitchers who lost significant time.</td></tr>
+                <tr><td><b>IP volatility</b></td><td>Coefficient of variation (standard deviation / mean) across all non-COVID seasons</td><td>+1 if CV &gt; 0.30, +2 if CV &gt; 0.45. Measures overall inconsistency.</td></tr>
+                <tr><td><b>Missing seasons</b></td><td>Gaps in the year-to-year record (pitcher absent from leaderboards entirely)</td><td>+1.2 per missing year. The clearest signal of serious injury or demotion.</td></tr>
+                <tr><td><b>Age</b></td><td>Older pitchers break down more often</td><td>+0.5 for age 32&ndash;34, +1.5 for age 35+.</td></tr>
+              </tbody>
+            </table>
+            <p>The 2020 COVID-shortened season is excluded from all year-to-year comparisons to avoid false flags &mdash; nearly every pitcher had a large IP drop that year for non-injury reasons.</p>
+            <p>The final score is clamped to a 1&ndash;10 range and categorized:</p>
+            <ul>
+              <li><b>1&ndash;3 (Low Risk)</b> &mdash; Consistent IP history with few significant drops. Durable track record.</li>
+              <li><b>4&ndash;6 (Moderate)</b> &mdash; Some IP volatility or missed time. Worth monitoring workload.</li>
+              <li><b>7&ndash;10 (High Risk)</b> &mdash; History of significant IP drops or missed seasons. Elevated injury concern.</li>
+            </ul>
+            <p>Pitchers with fewer than 2 seasons of historical data do not receive a score, since there isn't enough workload history to evaluate.</p>
+          </div>
+
           <h3>Data Sources</h3>
           <div class="meth-section">
             <p>All pitcher data sourced from <a href="https://www.fangraphs.com" target="_blank" style="color:#3182ce">FanGraphs</a> via the baseballr R package. Stuff+, Location+, and Pitching+ are derived from MLB Statcast pitch-tracking data. The dataset covers 5,788 pitcher-seasons from 2015&ndash;2024, with 873 pitchers in the 2025 projection pool.</p>
