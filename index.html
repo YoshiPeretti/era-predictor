@@ -499,6 +499,19 @@ table.data-table tbody tr:hover { background: #edf2f7; }
 .card-tag.strength { background: #f0fff4; color: #22543d; border: 1px solid #c6f6d5; }
 .card-tag.weakness { background: #fff5f5; color: #742a2a; border: 1px solid #fed7d7; }
 
+.injury-bar { margin-top: 18px; padding: 14px 16px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 10px; }
+.injury-bar-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #718096; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+.injury-bar-score { font-size: 14px; font-weight: 800; }
+.injury-bar-score.low { color: #38a169; }
+.injury-bar-score.mid { color: #d69e2e; }
+.injury-bar-score.high { color: #e53e3e; }
+.injury-track { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; position: relative; }
+.injury-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+.injury-fill.low { background: linear-gradient(90deg, #48bb78, #38a169); }
+.injury-fill.mid { background: linear-gradient(90deg, #ecc94b, #d69e2e); }
+.injury-fill.high { background: linear-gradient(90deg, #fc8181, #e53e3e); }
+.injury-note { font-size: 11px; color: #a0aec0; margin-top: 6px; line-height: 1.5; }
+
 .name-link {
   color: #2c5282;
   cursor: pointer;
@@ -1281,6 +1294,56 @@ function filterProjTable() {
   document.getElementById('proj-count').textContent = query ? `${shown} matching` : '';
 }
 
+// ── Injury Proneness Rating ──────────────────────────────────────────────────
+function calcInjuryRisk(name, age) {
+  const history = RAW_DATA.filter(r => r.Name === name)
+    .sort((a, b) => a.Season - b.Season);
+  if (history.length < 2) return null;
+
+  const ips = history.map(r => ({ season: r.Season, ip: r.IP || 0 }));
+  let risk = 3; // baseline — everyone starts at 3
+
+  // Count big IP drops (>40% year-to-year, skip 2020 COVID season)
+  for (let i = 1; i < ips.length; i++) {
+    if (ips[i].season === 2020 || ips[i-1].season === 2020) continue;
+    if (ips[i-1].ip > 50) {
+      const drop = (ips[i-1].ip - ips[i].ip) / ips[i-1].ip;
+      if (drop > 0.4) risk += 1.5;
+      else if (drop > 0.25) risk += 0.5;
+    }
+  }
+
+  // Low IP seasons (< 60 IP when peak is > 120, skip 2020)
+  const nonCovid = ips.filter(s => s.season !== 2020);
+  const peak = Math.max(...nonCovid.map(s => s.ip));
+  if (peak > 120) {
+    const lowSeasons = nonCovid.filter(s => s.ip < 60).length;
+    risk += lowSeasons * 0.7;
+  }
+
+  // IP volatility (coefficient of variation, skip 2020)
+  const ipVals = nonCovid.map(s => s.ip);
+  const mean = ipVals.reduce((a, b) => a + b, 0) / ipVals.length;
+  const std = Math.sqrt(ipVals.reduce((a, b) => a + (b - mean) ** 2, 0) / ipVals.length);
+  const cv = mean > 0 ? std / mean : 0;
+  if (cv > 0.45) risk += 2;
+  else if (cv > 0.3) risk += 1;
+
+  // Age factor
+  if (age && age >= 35) risk += 1.5;
+  else if (age && age >= 32) risk += 0.5;
+
+  // Missing seasons (gaps in year sequence)
+  for (let i = 1; i < ips.length; i++) {
+    const gap = ips[i].season - ips[i-1].season;
+    if (gap > 1 && !(ips[i-1].season < 2020 && ips[i].season > 2020)) {
+      risk += (gap - 1) * 1.2;
+    }
+  }
+
+  return Math.min(10, Math.max(1, Math.round(risk)));
+}
+
 // ── Pitcher Detail Card ──────────────────────────────────────────────────────
 function openPitcherCard(name) {
   const p = projRows.find(r => r.Name === name);
@@ -1462,6 +1525,28 @@ function openPitcherCard(name) {
     report += `The model expects a similar level of performance in 2026 — the current ERA aligns well with the underlying metrics.`;
   }
 
+  // Injury proneness
+  const injuryRisk = calcInjuryRisk(name, p.Age);
+  let injuryHtml = '';
+  if (injuryRisk != null) {
+    const injCls = injuryRisk <= 3 ? 'low' : injuryRisk <= 6 ? 'mid' : 'high';
+    const injLabel = injuryRisk <= 3 ? 'Low Risk' : injuryRisk <= 6 ? 'Moderate' : 'High Risk';
+    const injNote = injuryRisk <= 3
+      ? 'Consistent IP history with few significant drops. Durable track record.'
+      : injuryRisk <= 6
+      ? 'Some IP volatility or missed time in recent seasons. Monitor workload.'
+      : 'History of significant IP drops or missed seasons. Elevated injury concern.';
+    injuryHtml = `
+      <div class="injury-bar">
+        <div class="injury-bar-label">
+          <span>Injury Proneness</span>
+          <span class="injury-bar-score ${injCls}">${injuryRisk}/10 &mdash; ${injLabel}</span>
+        </div>
+        <div class="injury-track"><div class="injury-fill ${injCls}" style="width:${injuryRisk * 10}%"></div></div>
+        <div class="injury-note">${injNote}</div>
+      </div>`;
+  }
+
   // Diff display
   const diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);
   const diffCls = diff < 0 ? 'green' : diff > 0 ? 'red' : '';
@@ -1500,6 +1585,7 @@ function openPitcherCard(name) {
         <h4>Scouting Report</h4>
         <div class="card-tags">${tagsHtml}</div>
         <p>${report}</p>
+        ${injuryHtml}
       </div>
     </div>
   `;
