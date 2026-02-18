@@ -63,36 +63,6 @@ body {
   background: #48bb78;
   box-shadow: 0 0 6px rgba(72,187,120,0.5);
 }
-.header-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.header-stat {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  padding: 14px 16px;
-  text-align: center;
-}
-.header-stat-val {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-}
-.header-stat-val.red { color: #fc8181; }
-.header-stat-val.green { color: #68d391; }
-.header-stat-val.blue { color: #90cdf4; }
-.header-stat-label {
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 4px;
-}
 .header-insight {
   background: rgba(255,255,255,0.06);
   border-radius: 10px;
@@ -113,15 +83,11 @@ body {
   margin-bottom: 4px;
 }
 @media (max-width: 900px) {
-  .header-stats { grid-template-columns: repeat(2, 1fr); }
   .header-top { flex-direction: column; gap: 12px; }
 }
 @media (max-width: 600px) {
   .app-header { padding: 20px 18px 18px; }
   .app-header h1 { font-size: 22px; }
-  .header-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .header-stat { padding: 10px 12px; }
-  .header-stat-val { font-size: 18px; }
 }
 
 /* Layout */
@@ -582,27 +548,9 @@ table.data-table tbody tr:hover { background: #edf2f7; }
       6-Metric OLS Model &middot; R&sup2; = 0.208
     </div>
   </div>
-  <div class="header-stats">
-    <div class="header-stat">
-      <div class="header-stat-val red">0.071</div>
-      <div class="header-stat-label">ERA R&sup2;</div>
-    </div>
-    <div class="header-stat">
-      <div class="header-stat-val blue">0.170</div>
-      <div class="header-stat-label">SIERA R&sup2;</div>
-    </div>
-    <div class="header-stat">
-      <div class="header-stat-val blue">0.182</div>
-      <div class="header-stat-label">Stuff+ R&sup2;</div>
-    </div>
-    <div class="header-stat">
-      <div class="header-stat-val green">0.208</div>
-      <div class="header-stat-label">6-Metric Model R&sup2;</div>
-    </div>
-  </div>
   <div class="header-insight">
-    <span class="insight-label">Key Finding</span>
-    A pitcher's ERA is one of the <b>worst</b> predictors of their future ERA (R&sup2; = 0.07). By combining <b>FIP, BB/9, HR/9, K-BB%, Stuff+,</b> and <b>Location+</b> into one model, predictive power jumps to <b>R&sup2; = 0.208</b> &mdash; 3x better than ERA alone. These metrics capture repeatable skill (strikeout ability, walk rate, pitch quality) rather than luck on balls in play.
+    <span class="insight-label">About This Site</span>
+    We test how well each pitching metric predicts <b>next-season ERA</b> using R&sup2; &mdash; the share of variation in future ERA that a stat explains (higher = more predictive). A backtested 6-metric regression model (<b>FIP, BB/9, HR/9, K-BB%, Stuff+, Location+</b>) powers the <b>2026 projections</b> for every qualified pitcher. Click any name to open their <b>player profile</b> &mdash; a scouting report with radar chart, percentile grades, pitch arsenal, and where the model thinks they're headed next season.
   </div>
 </div>
 
