@@ -867,26 +867,16 @@ function renderR2Bar() {
     if (reg.n >= 5) results.push({ metric: m, r2: reg.r2, type: 'single' });
   }
 
-  // Add user-selected multivariate model R² (in-sample and backtested)
-  if (metrics.length >= 2) {
-    const mvModel = multiReg(data, metrics);
-    if (mvModel) results.push({ metric: 'Selected (in-sample)', r2: mvModel.r2, type: 'mv-in' });
-    const cv = multiRegCV(data, metrics);
-    if (cv) results.push({ metric: 'Selected (backtested)', r2: cv.r2, type: 'mv-cv' });
-  }
-
-  // Add optimized 6-metric model R² (always shown)
+  // Add optimized 6-metric model R² (FIP + BB/9 + HR/9 + K-BB% + Stuff+ + Location+)
   const OPT = ['FIP', 'BB/9', 'HR/9', 'K-BB%', 'Stuff+', 'Location+'];
   const optModel = multiReg(data, OPT);
-  if (optModel) results.push({ metric: 'Optimized Model (in-sample)', r2: optModel.r2, type: 'opt-in' });
+  if (optModel) results.push({ metric: '6-Metric Model (in-sample)', r2: optModel.r2, type: 'opt-in' });
   const optCV = multiRegCV(data, OPT);
-  if (optCV) results.push({ metric: 'Optimized Model (backtested)', r2: optCV.r2, type: 'opt-cv' });
+  if (optCV) results.push({ metric: '6-Metric Model (backtested)', r2: optCV.r2, type: 'opt-cv' });
 
   results.sort((a, b) => a.r2 - b.r2);
 
   const barColors = results.map(r => {
-    if (r.type === 'mv-in') return '#b8860b';
-    if (r.type === 'mv-cv') return '#daa520';
     if (r.type === 'opt-in') return '#2f855a';
     if (r.type === 'opt-cv') return '#48bb78';
     return METRIC_COLORS[r.metric] || '#3182ce';
@@ -924,18 +914,12 @@ function renderR2Bar() {
   if (singles.length >= 4) {
     const top2 = singles.slice(-2).reverse().map(r => r.metric).join(' & ');
     const bot2 = singles.slice(0, 2).map(r => r.metric).join(' & ');
-    const cvEntry = results.find(r => r.type === 'mv-cv');
-    const inEntry = results.find(r => r.type === 'mv-in');
     const optCvEntry = results.find(r => r.type === 'opt-cv');
     const optInEntry = results.find(r => r.type === 'opt-in');
     let mvNote = '';
-    if (cvEntry && inEntry) {
-      const gap = ((inEntry.r2 - cvEntry.r2) * 100).toFixed(1);
-      mvNote = `<span class="r2-sep">&middot;</span><span style="color:#b8860b">Selected gap: ${gap}%</span>`;
-    }
     if (optCvEntry && optInEntry) {
       const optGap = ((optInEntry.r2 - optCvEntry.r2) * 100).toFixed(1);
-      mvNote += `<span class="r2-sep">&middot;</span><span style="color:#2f855a">Optimized R²: ${optCvEntry.r2.toFixed(3)} (gap: ${optGap}%)</span>`;
+      mvNote = `<span class="r2-sep">&middot;</span><span style="color:#2f855a">6-Metric Model backtested R²: ${optCvEntry.r2.toFixed(3)} (overfitting gap: ${optGap}%)</span>`;
     }
     document.getElementById('r2-summary').innerHTML =
       `<div class="r2-summary"><span class="r2-best">Most predictive: ${top2}</span>` +
